@@ -1,0 +1,35 @@
+services:
+  nexus-panel:
+    image: ${NEXUS_IMAGE:-nexus-panel:0.1.0}
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 384m
+    cpus: 1.5
+    ports:
+      - "${NEXUS_BIND_ADDRESS:-127.0.0.1}:${NEXUS_PORT:-18085}:3000"
+    volumes:
+      - nexus_data:/data
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+      DATABASE_PATH: /data/nexus.db
+      HEALTH_TIMEOUT_MS: ${HEALTH_TIMEOUT_MS:-5000}
+      HEALTH_ALLOWED_CIDRS: ${HEALTH_ALLOWED_CIDRS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  nexus_data:
