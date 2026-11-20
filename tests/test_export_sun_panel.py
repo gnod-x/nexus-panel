@@ -20,7 +20,7 @@ class SunPanelExportTests(unittest.TestCase):
                 );
                 CREATE TABLE item_icon (
                     id INTEGER PRIMARY KEY, title TEXT, only_name TEXT, url TEXT,
-                    lan_url TEXT, description TEXT, item_icon_group_id INTEGER,
+                    lan_url TEXT, icon_json TEXT, description TEXT, item_icon_group_id INTEGER,
                     sort INTEGER, deleted_at TEXT
                 );
                 INSERT INTO item_icon_group VALUES
@@ -28,10 +28,10 @@ class SunPanelExportTests(unittest.TestCase):
                     (2, 'Operations', 'duplicate', 2, NULL);
                 INSERT INTO item_icon VALUES
                     (1, 'Router', 'duplicate', 'https://public.example/router',
-                     'http://router.local/?token=private', 'token: hidden-value', 1, 1, NULL),
-                    (2, 'Status', 'duplicate', 'https://status.example/path?q=ok#section',
-                     NULL, 'Public status', 2, 2, NULL),
-                    (3, 'Unsafe', 'unsafe', 'javascript:alert(1)', NULL, '', 1, 3, NULL);
+                     'http://router.local/?token=private', '{"text":"Router icon label"}', 'token: hidden-value', 1, 1, NULL),
+                    (2, '', 'duplicate', 'https://status.example/path?q=ok#section',
+                     NULL, '{"text":"Status from icon","src":"secret-not-exported"}', 'Public status', 2, 2, NULL),
+                    (3, 'Unsafe', 'unsafe', 'javascript:alert(1)', NULL, '{"text":"Unsafe"}', '', 1, 3, NULL);
                 """
             )
 
@@ -50,6 +50,9 @@ class SunPanelExportTests(unittest.TestCase):
             self.assertEqual(data["services"][0]["url"], "https://public.example/router")
             self.assertEqual(data["services"][1]["url"], "https://status.example/path?q=ok")
             self.assertEqual(data["services"][0]["groupSlug"], "duplicate")
+            self.assertEqual(data["services"][1]["name"], "Status from icon")
+            self.assertNotIn("icon_json", data["services"][1])
+            self.assertNotIn("secret-not-exported", json.dumps(data))
             self.assertNotIn("hidden-value", json.dumps(data))
             self.assertNotIn("icon", data["services"][0])
 

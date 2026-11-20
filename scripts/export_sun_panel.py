@@ -44,7 +44,7 @@ def export(source: Path) -> tuple[dict, dict]:
             "SELECT id, title, only_name, sort FROM item_icon_group WHERE deleted_at IS NULL ORDER BY sort, id"
         ).fetchall()
         cards = db.execute(
-            "SELECT title, only_name, url, lan_url, description, item_icon_group_id, sort "
+            "SELECT title, only_name, icon_json, url, lan_url, description, item_icon_group_id, sort "
             "FROM item_icon WHERE deleted_at IS NULL ORDER BY sort, id"
         ).fetchall()
     finally:
@@ -72,6 +72,13 @@ def export(source: Path) -> tuple[dict, dict]:
     skipped = 0
     for index, row in enumerate(cards, start=1):
         name = (row["title"] or "").strip()
+        if not name:
+            try:
+                icon_payload = json.loads(row["icon_json"] or "{}")
+            except (TypeError, json.JSONDecodeError):
+                icon_payload = {}
+            if isinstance(icon_payload, dict) and isinstance(icon_payload.get("text"), str):
+                name = icon_payload["text"].strip()
         url = safe_url(row["lan_url"], row["url"])
         if not name or not url:
             skipped += 1

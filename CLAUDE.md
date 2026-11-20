@@ -22,7 +22,7 @@ Nexus Panel is an open-source, self-hosted dashboard for organizing services and
 ## Data and migration
 
 - Existing Sun-Panel data is read-only input. Never modify or delete its database, uploads, configuration, or running container during development.
-- Import only groups, service names, links, and descriptions. The current exporter omits icon payloads and skips unsafe links; do not import credentials, tokens, public/private access flags, or arbitrary custom JavaScript.
+- Import only groups, service names, links, and descriptions. If a Sun-Panel card has no title, the exporter may use its icon text as the name; it omits icon payloads and skips unsafe links. Never import credentials, tokens, public/private access flags, or arbitrary custom JavaScript.
 - The importer must preview changes and write a separate Nexus database. It must not replace an existing database.
 - Cloud staging uses synthetic fixtures and has no production credentials or household addresses.
 
