@@ -11,7 +11,10 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 SECRET_QUERY_KEY = re.compile(r"(token|secret|password|passwd|auth|api.?key|credential|signature|(^|_)sig($|_))", re.I)
-SECRET_TEXT = re.compile(r"\b(token|secret|password|passwd|api[_-]?key)\s*[:=]\s*[^\s,;]+", re.I)
+SENSITIVE_DESCRIPTION = re.compile(
+    r"""\b(?:[\w.-]*(?:token|secret|password|passwd|credential|authorization|cookie)|api[ _-]?key)\b["']?\s*[:=]|\bbearer\s+\S+|https?://[^\s/]+@""",
+    re.I,
+)
 
 
 def slugify(value: str, fallback: str) -> str:
@@ -36,15 +39,18 @@ def safe_url(primary: str | None, fallback: str | None) -> str | None:
 
 
 def export(source: Path) -> tuple[dict, dict]:
-    uri = f"file:{source.resolve()}?mode=ro"
+    uri = source.resolve().as_uri() + "?mode=ro"
     db = sqlite3.connect(uri, uri=True)
     db.row_factory = sqlite3.Row
     try:
         groups = db.execute(
             "SELECT id, title, only_name, sort FROM item_icon_group WHERE deleted_at IS NULL ORDER BY sort, id"
         ).fetchall()
+        # Some minimal/legacy inputs omit icon_json; keep titled-card export usable.
+        card_columns = {row["name"] for row in db.execute("PRAGMA table_info(item_icon)")}
+        icon_column = "icon_json" if "icon_json" in card_columns else "NULL AS icon_json"
         cards = db.execute(
-            "SELECT title, only_name, icon_json, url, lan_url, description, item_icon_group_id, sort "
+            f"SELECT title, only_name, {icon_column}, url, lan_url, description, item_icon_group_id, sort "
             "FROM item_icon WHERE deleted_at IS NULL ORDER BY sort, id"
         ).fetchall()
     finally:
@@ -75,8 +81,9 @@ def export(source: Path) -> tuple[dict, dict]:
         if not name:
             try:
                 icon_payload = json.loads(row["icon_json"] or "{}")
-            except (TypeError, json.JSONDecodeError):
+            except (TypeError, json.JSONDecodeError, UnicodeDecodeError):
                 icon_payload = {}
+            # Read display text only; never copy image/HTML/other icon fields.
             if isinstance(icon_payload, dict) and isinstance(icon_payload.get("text"), str):
                 name = icon_payload["text"].strip()
         url = safe_url(row["lan_url"], row["url"])
@@ -91,9 +98,11 @@ def export(source: Path) -> tuple[dict, dict]:
             suffix += 1
         used_services.add(slug)
         item = {"name": name[:100], "slug": slug, "url": url, "tags": []}
-        description = SECRET_TEXT.sub(r"\1=[redacted]", (row["description"] or "").strip())[:500]
-        if description:
-            item["description"] = description
+        description = (row["description"] or "").strip()
+        # Drop the whole description when recognized credentials are present:
+        # partial replacement can leave quoted/multiword values behind.
+        if description and not SENSITIVE_DESCRIPTION.search(description):
+            item["description"] = description[:500]
         if row["item_icon_group_id"] in group_slugs:
             item["groupSlug"] = group_slugs[row["item_icon_group_id"]]
         exported_services.append(item)
@@ -120,6 +129,18 @@ def write_private(path: Path, data: dict) -> None:
             os.unlink(temporary)
 
 
+def output_overlaps_source(source: Path, output: Path) -> bool:
+    real_source = source.resolve()
+    protected = [real_source] + [Path(str(real_source) + suffix) for suffix in ("-wal", "-shm", "-journal")]
+    real_output = output.resolve()
+    for candidate in protected:
+        if real_output == candidate or output.absolute() == candidate:
+            return True
+        if output.exists() and candidate.exists() and os.path.samefile(output, candidate):
+            return True
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True, type=Path, help="Sun-Panel SQLite database (opened read-only)")
@@ -127,6 +148,8 @@ def main() -> int:
     args = parser.parse_args()
     if not args.source.is_file():
         parser.error("source database does not exist")
+    if args.output and output_overlaps_source(args.source, args.output):
+        parser.error("output must not replace the source database or its SQLite sidecar files")
     try:
         data, summary = export(args.source)
     except sqlite3.Error as error:

@@ -1,0 +1,656 @@
+/* Monochrome Silver Calligraphy Showcase: self-hosted Liu Jian Mao Cao wild cursive script, obsidian plates, platinum slash edges, and mobile asymmetric Bento + vertical pillar mosaic. */
+.nexus-home {
+  --nx-base: var(--canvas);
+  --nx-surface: var(--surface);
+  --nx-ink: var(--text);
+  --nx-muted: var(--muted);
+  --nx-primary: var(--accent);
+  --nx-line: var(--border-soft);
+  --nx-well: var(--surface-raised);
+  --nx-bad: var(--danger);
+  --nx-display: var(--nx-home-font-family, "Liu Jian Mao Cao", "Zhi Mang Xing", "STKaiti", "KaiTi", "PingFang SC", cursive, sans-serif);
+  --nx-ease-expo: cubic-bezier(0.22, 1, 0.36, 1);
+  display: grid;
+  gap: 32px;
+  min-width: 0;
+  color: var(--nx-ink);
+  font: inherit;
+  line-height: 1.5;
+}
+:root[data-theme="light"] .nexus-home {
+  --nx-base: #f4f5f7;
+  --nx-surface: #ffffff;
+  --nx-ink: #0f172a;
+  --nx-muted: #475569;
+  --nx-primary: #1e293b;
+  --nx-line: rgba(15, 23, 42, 0.10);
+  --nx-well: #e6e9ef;
+}
+.nexus-home *, .nexus-home *::before, .nexus-home *::after { box-sizing: border-box; }
+.nexus-home button, .nexus-home a { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.nexus-home button:focus-visible, .nexus-home a:focus-visible { outline: 2px solid var(--nx-primary); outline-offset: 2px; }
+
+.nexus-home .nx-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+}
+.nexus-home .nx-directory { min-width: 0; }
+
+.nexus-home .nx-directory-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  color: var(--nx-bad);
+  font-size: 13px;
+}
+.nexus-home .nx-directory-notice > svg { flex: none; }
+.nexus-home .nx-directory-notice > span { min-width: 0; overflow-wrap: anywhere; }
+.nexus-home .nx-directory-notice button {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--nx-primary);
+  font-family: var(--nx-display);
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+}
+
+/* 12-column asymmetric Monochrome-Silver monolith mosaic */
+.nexus-home .nx-service-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 18px;
+  min-width: 0;
+  padding: 0;
+}
+
+.nexus-home .nx-service-tile {
+  --nx-plate-bg: #0b0d12;
+  --nx-edge: #cbd5e1;
+  --nx-plate-ink: #ffffff;
+  --nx-plate-ctrl: #e2e8f0;
+  --nx-plate-ctrl-hover: rgba(255, 255, 255, 0.14);
+  --nx-plate-star: #ffffff;
+  --nx-plate-wm: rgba(203, 213, 225, 0.08);
+  --nx-plate-glow: rgba(226, 232, 240, 0.18);
+  --nx-plate-text-glow: 0 2px 18px rgba(0, 0, 0, 0.92), 0 0 18px rgba(203, 213, 225, 0.22);
+  --nx-plate-shadow: inset 5px 0 0 var(--nx-edge), 0 14px 32px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  --nx-plate-shadow-hover: inset 6px 0 0 #ffffff, 0 22px 48px rgba(0, 0, 0, 0.72), 0 0 28px rgba(203, 213, 225, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  --nx-radius: 22px 6px 22px 6px;
+
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  grid-column: span 4;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 46px;
+  column-gap: 6px;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 184px;
+  padding: 20px 14px 22px 26px;
+  margin: 0;
+  border-radius: var(--nx-radius);
+  background-color: var(--nx-plate-bg);
+  color: var(--nx-plate-ink);
+  box-shadow: var(--nx-plate-shadow);
+  animation: nx-plate-enter 420ms var(--nx-ease-expo) var(--enter-delay, 0ms) both;
+  transition: transform 240ms var(--nx-ease-expo), box-shadow 260ms var(--nx-ease-expo), border-color 220ms var(--nx-ease-expo);
+}
+
+.nexus-home .nx-slot-0,
+.nexus-home .nx-slot-4,
+.nexus-home .nx-slot-8 {
+  grid-column: span 5;
+  --nx-radius: 24px 6px 24px 8px;
+}
+.nexus-home .nx-slot-1,
+.nexus-home .nx-slot-5,
+.nexus-home .nx-slot-6 {
+  grid-column: span 4;
+  --nx-radius: 6px 22px 6px 22px;
+}
+.nexus-home .nx-slot-2,
+.nexus-home .nx-slot-3,
+.nexus-home .nx-slot-7 {
+  grid-column: span 3;
+  --nx-radius: 20px 6px 14px 6px;
+}
+
+@media (min-width: 1001px) {
+  .nexus-home .nx-service-tile:nth-child(3n + 1):last-child {
+    grid-column: span 12;
+    --nx-radius: 24px 8px 24px 8px;
+  }
+  .nexus-home .nx-service-tile:nth-child(3n + 1):nth-last-child(2) {
+    grid-column: span 7;
+    --nx-radius: 24px 6px 24px 8px;
+  }
+  .nexus-home .nx-service-tile:nth-child(3n + 2):last-child {
+    grid-column: span 5;
+    --nx-radius: 6px 24px 8px 24px;
+  }
+}
+
+.nexus-home .nx-service-tile::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 50%), var(--nx-plate-glow), transparent 64%);
+  transition: opacity 240ms var(--nx-ease-expo);
+}
+.nexus-home .nx-service-tile::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: -25% -65%;
+  pointer-events: none;
+  background: linear-gradient(108deg, transparent 36%, rgba(226, 232, 240, 0.16) 50%, transparent 64%);
+  animation: nx-glint-sweep 680ms var(--nx-ease-expo) calc(var(--enter-delay, 0ms) + 80ms) 1 both;
+}
+
+/* Dark Mode: Unified 2-color Monochrome Void Black + Platinum Silver depth */
+.nexus-home .nx-tile-tone-0 {
+  --nx-plate-bg: #090b10;
+  --nx-edge: #e2e8f0;
+  background-image:
+    radial-gradient(115% 110% at 88% 10%, rgba(226, 232, 240, 0.14) 0%, rgba(148, 163, 184, 0.06) 44%, rgba(9, 11, 16, 0) 76%),
+    linear-gradient(135deg, rgba(30, 36, 48, 0.72) 0%, rgba(9, 11, 16, 0) 72%);
+  border: 1px solid rgba(226, 232, 240, 0.24);
+}
+.nexus-home .nx-tile-tone-1 {
+  --nx-plate-bg: #0b0e14;
+  --nx-edge: #cbd5e1;
+  background-image:
+    radial-gradient(115% 110% at 18% 88%, rgba(203, 213, 225, 0.12) 0%, rgba(148, 163, 184, 0.05) 44%, rgba(11, 14, 20, 0) 76%),
+    linear-gradient(155deg, rgba(24, 29, 40, 0.74) 0%, rgba(9, 11, 16, 0) 74%);
+  border: 1px solid rgba(203, 213, 225, 0.22);
+}
+.nexus-home .nx-tile-tone-2 {
+  --nx-plate-bg: #080a0f;
+  --nx-edge: #f1f5f9;
+  background-image:
+    radial-gradient(115% 110% at 84% 84%, rgba(241, 245, 249, 0.11) 0%, rgba(148, 163, 184, 0.05) 45%, rgba(8, 10, 15, 0) 76%),
+    linear-gradient(125deg, rgba(28, 34, 46, 0.68) 0%, rgba(8, 10, 15, 0) 72%);
+  border: 1px solid rgba(241, 245, 249, 0.20);
+}
+.nexus-home .nx-tile-tone-3 {
+  --nx-plate-bg: #0c0f16;
+  --nx-edge: #94a3b8;
+  background-image:
+    radial-gradient(110% 105% at 85% 14%, rgba(148, 163, 184, 0.16) 0%, rgba(100, 116, 139, 0.07) 44%, rgba(12, 15, 22, 0) 76%),
+    linear-gradient(140deg, rgba(33, 40, 54, 0.68) 0%, rgba(10, 12, 18, 0) 72%);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+}
+.nexus-home .nx-tile-tone-4 {
+  --nx-plate-bg: #0a0c12;
+  --nx-edge: #cbd5e1;
+  background-image:
+    radial-gradient(110% 105% at 50% 6%, rgba(203, 213, 225, 0.13) 0%, rgba(148, 163, 184, 0.05) 46%, rgba(10, 12, 18, 0) 78%),
+    linear-gradient(165deg, rgba(26, 31, 42, 0.72) 0%, rgba(8, 10, 14, 0) 72%);
+  border: 1px solid rgba(203, 213, 225, 0.23);
+}
+
+/* Light Mode fallback preserves monochrome Obsidian-Silver contrast & white calligraphy */
+:root[data-theme="light"] .nexus-home .nx-service-tile {
+  --nx-plate-bg: #11151f;
+  --nx-edge: #cbd5e1;
+  --nx-plate-ink: #ffffff;
+  --nx-plate-ctrl: #e2e8f0;
+  --nx-plate-star: #ffffff;
+  --nx-plate-wm: rgba(203, 213, 225, 0.10);
+  --nx-plate-glow: rgba(255, 255, 255, 0.16);
+  --nx-plate-text-glow: 0 2px 14px rgba(0, 0, 0, 0.55);
+  --nx-plate-shadow: inset 5px 0 0 var(--nx-edge), 0 12px 28px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --nx-plate-shadow-hover: inset 6px 0 0 #ffffff, 0 18px 40px rgba(15, 23, 42, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.26);
+  background-image:
+    radial-gradient(115% 110% at 88% 12%, rgba(226, 232, 240, 0.14) 0%, rgba(148, 163, 184, 0.05) 44%, rgba(17, 21, 31, 0) 75%),
+    linear-gradient(135deg, #1d2433 0%, #0f141e 100%);
+  border: 1px solid rgba(15, 23, 42, 0.30);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .nexus-home .nx-service-tile:hover {
+    transform: translate3d(0, -5px, 0);
+    box-shadow: var(--nx-plate-shadow-hover);
+    border-color: rgba(241, 245, 249, 0.42);
+  }
+  .nexus-home .nx-service-tile:hover::before { opacity: 1; }
+  .nexus-home .nx-service-tile:hover .nx-tile-bg {
+    transform: translate3d(-4px, -4px, 0) scale(1.05);
+  }
+  .nexus-home .nx-tile-link:hover .nx-tile-arrow {
+    opacity: 0.98;
+    transform: translate3d(3px, -3px, 0);
+    color: #ffffff;
+  }
+}
+
+.nexus-home .nx-service-tile:has(.nx-tile-link:active) {
+  transform: translate3d(0, -1px, 0) scale(0.985);
+}
+.nexus-home .nx-service-tile:focus-within {
+  outline: 2px solid var(--nx-primary);
+  outline-offset: 2px;
+}
+
+.nexus-home .nx-tile-bg {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  color: var(--nx-plate-wm);
+  transition: transform 360ms var(--nx-ease-expo), color 360ms var(--nx-ease-expo);
+}
+.nexus-home .nx-tile-bg::before {
+  content: attr(data-index);
+  position: absolute;
+  top: 16px;
+  left: 26px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--nx-edge);
+  opacity: 0.85;
+}
+.nexus-home .nx-tile-bg svg {
+  position: absolute;
+  right: 54px;
+  bottom: -16px;
+  transform: rotate(-7deg);
+}
+
+.nexus-home .nx-tile-link {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  min-height: 132px;
+  margin: 0;
+  padding: 26px 4px 2px 0;
+  border-radius: 14px;
+  color: var(--nx-plate-ink);
+  text-decoration: none;
+}
+.nexus-home .nx-tile-link:focus-visible {
+  outline: 2px solid var(--nx-plate-ink);
+  outline-offset: 3px;
+}
+.nexus-home .nx-tile-link:focus-visible .nx-tile-arrow { opacity: 0.95; }
+
+.nexus-home .nx-tile-name {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--nx-plate-ink);
+  font-family: var(--nx-display);
+  font-size: clamp(28px, 2.5vw, 38px);
+  font-weight: 400;
+  line-height: 1.24;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-shadow: var(--nx-plate-text-glow);
+  animation: nx-name-enter 400ms var(--nx-ease-expo) calc(var(--enter-delay, 0ms) + 35ms) both;
+}
+.nexus-home .nx-slot-0 .nx-tile-name,
+.nexus-home .nx-slot-4 .nx-tile-name,
+.nexus-home .nx-slot-8 .nx-tile-name {
+  font-size: clamp(32px, 3vw, 44px);
+}
+.nexus-home .nx-slot-2 .nx-tile-name,
+.nexus-home .nx-slot-3 .nx-tile-name,
+.nexus-home .nx-slot-7 .nx-tile-name {
+  font-size: clamp(25px, 2.15vw, 33px);
+}
+
+.nexus-home .nx-tile-arrow {
+  flex: none;
+  align-self: flex-end;
+  margin-bottom: 6px;
+  color: var(--nx-plate-ctrl);
+  opacity: 0;
+  transition: opacity 220ms var(--nx-ease-expo), transform 260ms var(--nx-ease-expo), color 220ms var(--nx-ease-expo);
+}
+
+.nexus-home .nx-tile-actions {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nexus-home .nx-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 46px;
+  width: 46px;
+  min-width: 46px;
+  height: 46px;
+  min-height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--nx-plate-ctrl);
+  transition: color 140ms var(--ease-out), background-color 140ms var(--ease-out), transform 140ms var(--ease-out);
+}
+.nexus-home .nx-icon-button:hover {
+  background: var(--nx-plate-ctrl-hover);
+  color: var(--nx-plate-ink);
+}
+.nexus-home .nx-icon-button:focus-visible {
+  outline: 2px solid var(--nx-plate-ink);
+  outline-offset: 1px;
+}
+.nexus-home .nx-icon-button[aria-pressed="true"] {
+  color: var(--nx-plate-star);
+}
+
+.nexus-home .nx-schedule-section {
+  min-width: 0;
+  padding-top: 28px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.nexus-home .nx-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 220px;
+  padding: 30px 18px;
+  border: 1px dashed var(--border);
+  border-radius: 22px;
+  background: var(--nx-surface);
+  text-align: center;
+  color: var(--nx-primary);
+}
+.nexus-home .nx-empty h3 { margin: 0; color: var(--nx-ink); font-size: 18px; font-weight: 600; }
+.nexus-home .nx-empty p { margin: 0 0 8px; max-width: 100%; color: var(--nx-muted); font-size: 14px; overflow-wrap: anywhere; }
+.nexus-home .nx-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 9px 18px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--nx-surface);
+  color: var(--nx-primary);
+  font-family: var(--nx-display);
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+.nexus-home .nx-button:hover { background: var(--nx-well); }
+
+@keyframes nx-plate-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 22px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes nx-name-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes nx-glint-sweep {
+  from {
+    transform: translate3d(-65%, 0, 0);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(65%, 0, 0);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 1000px) {
+  .nexus-home .nx-service-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nexus-home .nx-service-tile {
+    grid-column: span 1;
+    min-height: 164px;
+    --nx-radius: 20px 6px 20px 6px;
+  }
+  .nexus-home .nx-slot-0,
+  .nexus-home .nx-slot-3,
+  .nexus-home .nx-slot-6 {
+    grid-column: span 2;
+    --nx-radius: 22px 6px 22px 8px;
+  }
+  .nexus-home .nx-slot-1,
+  .nexus-home .nx-slot-2,
+  .nexus-home .nx-slot-4,
+  .nexus-home .nx-slot-5,
+  .nexus-home .nx-slot-7,
+  .nexus-home .nx-slot-8 {
+    grid-column: span 1;
+  }
+  .nexus-home .nx-tile-link { min-height: 112px; }
+  .nexus-home .nx-tile-name { font-size: clamp(26px, 3.6vw, 35px); }
+  .nexus-home .nx-slot-0 .nx-tile-name,
+  .nexus-home .nx-slot-3 .nx-tile-name,
+  .nexus-home .nx-slot-6 .nx-tile-name { font-size: clamp(30px, 4.2vw, 40px); }
+}
+
+/* Mobile Irregular Multi-Card Rows: uneven pairs (7:5 / 5:7) + vertical pillar trio (4:4:4) */
+@media (max-width: 640px) {
+  .nexus-home { gap: 24px; }
+  .nexus-home .nx-schedule-section { padding-top: 22px; }
+  .nexus-home .nx-service-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .nexus-home .nx-service-tile {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 46px minmax(64px, 1fr);
+    row-gap: 6px;
+    column-gap: 0;
+    padding: 10px 10px 14px 14px;
+    min-height: 142px;
+  }
+  .nexus-home .nx-tile-bg::before {
+    top: 16px;
+    left: 14px;
+    font-size: 12px;
+  }
+  .nexus-home .nx-tile-bg svg {
+    right: 10px;
+    bottom: -12px;
+    width: 64px;
+    height: 64px;
+  }
+  .nexus-home .nx-tile-actions {
+    grid-row: 1;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+  }
+  .nexus-home .nx-tile-link {
+    grid-row: 2;
+    align-items: flex-end;
+    min-height: 64px;
+    width: 100%;
+    padding: 2px 0 0 0;
+  }
+  .nexus-home .nx-tile-arrow { display: none; }
+
+  .nexus-home .nx-slot-0,
+  .nexus-home .nx-slot-4 {
+    grid-column: span 7;
+    min-height: 138px;
+    --nx-radius: 20px 6px 20px 8px;
+  }
+  .nexus-home .nx-slot-1,
+  .nexus-home .nx-slot-5 {
+    grid-column: span 5;
+    min-height: 150px;
+    --nx-radius: 6px 20px 8px 20px;
+  }
+  .nexus-home .nx-slot-2 {
+    grid-column: span 5;
+    min-height: 150px;
+    --nx-radius: 20px 8px 6px 20px;
+  }
+  .nexus-home .nx-slot-3 {
+    grid-column: span 7;
+    min-height: 138px;
+    --nx-radius: 8px 20px 20px 6px;
+  }
+
+  .nexus-home .nx-tile-name,
+  .nexus-home .nx-slot-0 .nx-tile-name,
+  .nexus-home .nx-slot-3 .nx-tile-name,
+  .nexus-home .nx-slot-4 .nx-tile-name {
+    font-size: 25px;
+    line-height: 1.24;
+  }
+  .nexus-home .nx-slot-1 .nx-tile-name,
+  .nexus-home .nx-slot-2 .nx-tile-name,
+  .nexus-home .nx-slot-5 .nx-tile-name {
+    font-size: 22px;
+    line-height: 1.24;
+  }
+
+  .nexus-home .nx-service-tile:nth-child(9n + 1):last-child,
+  .nexus-home .nx-service-tile:nth-child(9n + 3):last-child,
+  .nexus-home .nx-service-tile:nth-child(9n + 5):last-child,
+  .nexus-home .nx-service-tile:nth-child(9n + 7):last-child {
+    grid-column: span 12;
+  }
+}
+
+@media (min-width: 365px) and (max-width: 640px) {
+  .nexus-home .nx-slot-6,
+  .nexus-home .nx-slot-7,
+  .nexus-home .nx-slot-8 {
+    grid-column: span 4;
+    min-height: 168px;
+    padding: 8px 6px 12px 10px;
+    --nx-radius: 16px 4px 16px 4px;
+  }
+  .nexus-home .nx-slot-6 .nx-tile-actions,
+  .nexus-home .nx-slot-7 .nx-tile-actions,
+  .nexus-home .nx-slot-8 .nx-tile-actions {
+    gap: 2px;
+  }
+  .nexus-home .nx-slot-6 .nx-tile-bg::before,
+  .nexus-home .nx-slot-7 .nx-tile-bg::before,
+  .nexus-home .nx-slot-8 .nx-tile-bg::before {
+    top: auto;
+    left: auto;
+    bottom: 6px;
+    right: 8px;
+    opacity: 0.24;
+  }
+  .nexus-home .nx-slot-6 .nx-tile-name,
+  .nexus-home .nx-slot-7 .nx-tile-name,
+  .nexus-home .nx-slot-8 .nx-tile-name {
+    font-size: 19px;
+    line-height: 1.22;
+  }
+  .nexus-home .nx-service-tile:nth-child(9n + 7):last-child {
+    grid-column: span 12;
+    padding: 10px 10px 14px 14px;
+    min-height: 138px;
+  }
+  .nexus-home .nx-service-tile:nth-child(9n + 7):last-child .nx-tile-name {
+    font-size: 25px;
+  }
+  .nexus-home .nx-service-tile:nth-child(9n + 7):nth-last-child(2) {
+    grid-column: span 7;
+    padding: 10px 10px 14px 14px;
+  }
+  .nexus-home .nx-service-tile:nth-child(9n + 8):last-child {
+    grid-column: span 5;
+    padding: 10px 10px 14px 14px;
+  }
+}
+
+@media (max-width: 364px) {
+  .nexus-home .nx-service-tile {
+    padding: 8px 6px 12px 10px;
+  }
+  .nexus-home .nx-tile-actions { gap: 2px; }
+  .nexus-home .nx-tile-bg::before {
+    top: auto;
+    left: auto;
+    bottom: 6px;
+    right: 8px;
+    opacity: 0.24;
+  }
+  .nexus-home .nx-slot-6 { grid-column: span 5; min-height: 146px; }
+  .nexus-home .nx-slot-7 { grid-column: span 7; min-height: 138px; }
+  .nexus-home .nx-slot-8 { grid-column: span 12; min-height: 124px; }
+  .nexus-home .nx-tile-name,
+  .nexus-home .nx-slot-0 .nx-tile-name,
+  .nexus-home .nx-slot-1 .nx-tile-name,
+  .nexus-home .nx-slot-2 .nx-tile-name,
+  .nexus-home .nx-slot-3 .nx-tile-name,
+  .nexus-home .nx-slot-4 .nx-tile-name,
+  .nexus-home .nx-slot-5 .nx-tile-name,
+  .nexus-home .nx-slot-6 .nx-tile-name,
+  .nexus-home .nx-slot-7 .nx-tile-name,
+  .nexus-home .nx-slot-8 .nx-tile-name {
+    font-size: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nexus-home *, .nexus-home *::before, .nexus-home *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .nexus-home .nx-service-tile,
+  .nexus-home .nx-tile-name {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  .nexus-home .nx-service-tile::before,
+  .nexus-home .nx-service-tile::after {
+    display: none !important;
+  }
+}

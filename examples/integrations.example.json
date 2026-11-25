@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "connections": [
+    {
+      "id": "synthetic-speed",
+      "name": "Synthetic CFSpeed",
+      "kind": "cfspeed",
+      "baseUrl": "https://cfspeed.example.invalid",
+      "serviceSlug": "synthetic-speed"
+    },
+    {
+      "id": "synthetic-vod",
+      "name": "Synthetic Quark VOD",
+      "kind": "quark-vod",
+      "baseUrl": "https://quark-vod.example.invalid",
+      "serviceSlug": "synthetic-vod",
+      "tokenFile": "/run/secrets/quark-vod-token"
+    }
+  ]
+}

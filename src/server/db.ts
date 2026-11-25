@@ -60,6 +60,7 @@ export class Store {
   purgeSessions() { this.db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(this.now()); }
 
   listGroups(): Group[] { return this.db.prepare('SELECT id,name,slug,color,sort_order as sortOrder,created_at as createdAt FROM groups ORDER BY sort_order,name').all() as Group[]; }
+  getGroup(id: number): Group | undefined { return this.db.prepare('SELECT id,name,slug,color,sort_order as sortOrder,created_at as createdAt FROM groups WHERE id=?').get(id) as Group | undefined; }
   createGroup(input: { name: string; slug: string; color?: string }) { const now = this.now(); const r = this.db.prepare('INSERT INTO groups(name,slug,color,created_at) VALUES(?,?,?,?)').run(input.name, input.slug, input.color || '#3b82f6', now); return this.db.prepare('SELECT id,name,slug,color,sort_order as sortOrder,created_at as createdAt FROM groups WHERE id=?').get(r.lastInsertRowid) as Group; }
   updateGroup(id: number, input: Partial<{ name: string; slug: string; color: string; sortOrder: number }>) { const fields: string[] = []; const values: unknown[] = []; for (const [key, val] of Object.entries(input)) { const col = key.replace(/[A-Z]/g, m => `_${m.toLowerCase()}`); fields.push(`${col}=?`); values.push(val); } if (!fields.length) return this.listGroups().find(g => g.id === id); values.push(id); this.db.prepare(`UPDATE groups SET ${fields.join(',')} WHERE id=?`).run(...values); return this.db.prepare('SELECT id,name,slug,color,sort_order as sortOrder,created_at as createdAt FROM groups WHERE id=?').get(id) as Group | undefined; }
   deleteGroup(id: number) { this.db.prepare('DELETE FROM groups WHERE id=?').run(id); }
@@ -72,5 +73,9 @@ export class Store {
   deleteService(id: number) { this.db.prepare('DELETE FROM services WHERE id=?').run(id); }
   addEvent(serviceId: number | null, type: string, message: string, metadata: Record<string,unknown> = {}) { const r=this.db.prepare('INSERT INTO events(service_id,type,message,metadata,created_at) VALUES(?,?,?,?,?)').run(serviceId,type,message,JSON.stringify(metadata),this.now()); return this.getEvent(Number(r.lastInsertRowid)); }
   getEvent(id:number): ServiceEvent | undefined { const row=this.db.prepare('SELECT id,service_id as serviceId,type,message,metadata,created_at as createdAt FROM events WHERE id=?').get(id) as any; return row ? {...row,metadata:JSON.parse(row.metadata||'{}')} : undefined; }
-  listEvents(limit=50) { return (this.db.prepare('SELECT id,service_id as serviceId,type,message,metadata,created_at as createdAt FROM events ORDER BY id DESC LIMIT ?').all(Math.min(Math.max(limit,1),200)) as any[]).map(row=>({...row,metadata:JSON.parse(row.metadata||'{}')})); }
+  listEvents(limit=50) {
+    const requested=Number(limit);
+    const bounded=Number.isNaN(requested)?50:Math.min(Math.max(Math.trunc(requested),1),200);
+    return (this.db.prepare('SELECT id,service_id as serviceId,type,message,metadata,created_at as createdAt FROM events ORDER BY id DESC LIMIT ?').all(bounded) as any[]).map(row=>({...row,metadata:JSON.parse(row.metadata||'{}')}));
+  }
 }

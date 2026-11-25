@@ -1,18 +1,26 @@
-# Sun-Panel Migration
+# Sun-Panel migration
 
-The importer is intended to read Sun-Panel data without changing it. The source stays online and remains the rollback target until the new panel has been verified locally.
+Sun-Panel remains read-only input and rollback reference. Export on its authorized host, review the private result, then import into a separate Nexus database. Household databases/exports/private URLs/credentials never belong in cloud staging. The synthetic cloud preview has separate data; an explicitly authorized home-host upgrade preserves the existing local Nexus project and volume and does not reimport or modify the Sun-Panel source.
 
-The exporter accepts an explicit read-only database path. It exports group and service names, associations, descriptions, and HTTP(S) links. If a card has no title, it uses text from the icon JSON as the display name. Nexus assigns a default group color for migrated groups and sorts them by name. The exporter does not copy icon images, arbitrary custom HTML, settings, or visibility flags.
+## Read-only export
 
-The importer opens SQLite with `mode=ro` and reads only the group/card tables; it does not read account, password, API-token, or settings tables. It prefers the LAN URL for local use, skips non-HTTP(S) URLs and URL query parameters with credential-like names, and ignores icon payloads after extracting a missing display name. If a LAN URL is rejected, it may use a safe public URL from the same card. Its exported JSON contains service names and local URLs and is private data. Keep it out of cloud staging and the public repository.
+The exporter reads group/card tables, not account/password/API-token/settings tables. It resolves the source and constructs an encoded SQLite file URI with mode=ro. Filenames containing Unicode, spaces, #, ? and % remain literal; committed active WAL data stays readable without immutable-mode assumptions.
 
-Nexus applies schema changes through SQLite `PRAGMA user_version`. The first migration creates the complete initial schema and is applied in one transaction; later releases can add numbered migrations without replacing the database file.
+Export includes bounded names/descriptions, group associations and safe HTTP(S) links. LAN URLs are preferred when usable; otherwise a safe public URL may be used. Unsupported schemes, embedded credentials and recognized sensitive query keys are rejected. Custom HTML/JavaScript, icons, visibility flags and unrelated settings are omitted.
 
-Run the preview and export on the host that holds the Sun-Panel database:
+Recognized credential-bearing descriptions are omitted **entirely**, including common Authorization/Bearer, token, password, Cookie and API-key assignments. This is not universal DLP. Manually review every field for secrets, intended targets and private content before import. A JSON export with no recognized secrets is still private.
 
-```bash
-python3 scripts/export_sun_panel.py --source /path/to/sun-panel.db
-python3 scripts/export_sun_panel.py --source /path/to/sun-panel.db --output ~/sun-panel-import.json
-```
+Output cannot resolve to the source or SQLite -wal/-shm/-journal sidecars, including existing hardlink/symlink aliases and directory aliases. Choose a distinct JSON path in a trusted operator-controlled directory. Adversarial concurrent filesystem replacement/TOCTOU is not claimed solved. Output is atomically replaced with owner-only 0600 permissions and is not a source backup.
 
-Inspect the private file, then open the administrator's import dialog (`导入数据`) and review the counts before confirming. An import that conflicts with existing slugs is rolled back in full. It writes only to the Nexus database. Keep the export out of cloud staging and the public repository.
+~~~bash
+python3 -B scripts/export_sun_panel.py --source /path/to/sun-panel.db
+python3 -B scripts/export_sun_panel.py --source /path/to/sun-panel.db --output ~/sun-panel-import.json
+~~~
+
+The first command previews counts. Review the second command's private JSON locally before upload; do not place it in cloud artifacts or source control.
+
+## Administrator import
+
+The dialog previews counts and requires admin permission. API accepts at most 1 MiB wire JSON including whitespace, 100 groups and 500 services. Every service/probe URL is validated before a single immediate transaction. Duplicate slugs or missing group references roll back all rows and prevent a partial success event. Only the separate Nexus database is written.
+
+Nexus uses numbered SQLite PRAGMA user_version migrations; it does not replace Sun-Panel. Keep the old database and verified backups until the new directory is validated. See [API](api-contract.md), [deployment](deployment.md), and [testing](testing.md).

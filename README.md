@@ -1,12 +1,14 @@
 # Nexus Panel
 
-Nexus Panel is a self-hosted control center for service links, availability checks, and recent incidents. It runs as one Docker container and stores its data in a persistent SQLite database.
+Nexus Panel is a self-hosted personal portal for service cards and read-only scheduled-task information. It runs as one Docker container and stores its data in a persistent SQLite database.
 
 ## Run with Docker
 
 Download a verified Docker bundle from GitHub Releases, or build from a source checkout. The [deployment guide](docs/deployment.md) covers both paths, local access, upgrading with a persistent data volume, and backup and recovery.
 
-The panel listens on <http://127.0.0.1:18085> by default. The first visit creates a local administrator. From the dashboard, group and search service links, bookmark favorites, run a health check on demand, and view recent events. The web interface is in Simplified Chinese.
+The panel listens on <http://127.0.0.1:18085> by default. The first visit creates a local administrator. The homepage contains service links, favorites and a read-only task schedule below the service gallery. The separate management area provides service/group search and editing, explicit availability checks, the complete task center, integrations and events. Administrators can choose one of four homepage font presets in management settings. The web interface is in Simplified Chinese.
+
+Version 0.2.0 includes the separate website and management interfaces, read-only task/integration evidence, homepage font settings and additional authentication/network hardening. See the [release notes](docs/releases/v0.2.0.md).
 
 ## Local development
 
@@ -31,8 +33,12 @@ The migration utility opens a Sun-Panel SQLite database in read-only mode and ex
 
 - [API and role contract](docs/api-contract.md)
 - [Architecture](docs/architecture.md)
+- [Frontend behavior](docs/frontend.md)
+- [Read-only task and integration configuration](docs/observability.md)
+- [Homepage font settings](docs/homepage-fonts.md)
+- [Testing and release checks](docs/testing.md)
 - [Security reporting](SECURITY.md)
 
 ## License
 
-Apache-2.0. See `LICENSE`.
+Apache-2.0. See `LICENSE`. The bundled Liu Jian Mao Cao font uses SIL OFL 1.1; see [third-party notices](THIRD_PARTY_NOTICES.md).

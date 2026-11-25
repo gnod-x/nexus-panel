@@ -1,11 +1,19 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0c1117" />
-    <meta name="description" content="Nexus Panel service operations console" />
-    <title>Nexus Control</title>
+    <meta name="theme-color" content="#060709" />
+    <meta name="description" content="常用服务与定时任务，一处查看。" />
+    <title>Nexus · 工作台</title>
+    <script>
+      (() => {
+        let theme = "dark";
+        try { if (localStorage.getItem("nexus-theme") === "light") theme = "light"; } catch {}
+        document.documentElement.dataset.theme = theme;
+        document.querySelector('meta[name="theme-color"]').content = theme === "dark" ? "#060709" : "#f4f5f7";
+      })();
+    </script>
   </head>
   <body><div id="root"></div><script type="module" src="/src/client/main.tsx"></script></body>
 </html>

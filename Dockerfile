@@ -7,11 +7,14 @@ COPY . .
 RUN npm run build && npm prune --omit=dev
 
 FROM node:22-bookworm-slim AS runtime
-ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0 DATABASE_PATH=/data/nexus.db
+ARG APP_VERSION=0.2.0
+ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0 DATABASE_PATH=/data/nexus.db APP_VERSION=${APP_VERSION}
 WORKDIR /app
 COPY --from=build --chown=node:node /app/package*.json ./
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
+COPY --chown=node:node LICENSE THIRD_PARTY_NOTICES.md ./
+COPY --chown=node:node src/client/fonts/OFL.txt ./licenses/LiuJianMaoCao-OFL.txt
 RUN mkdir -p /data && chown node:node /data
 USER node
 EXPOSE 3000

@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
+  CalendarClock,
+  Plug2,
   AlertTriangle,
   ArrowUpRight,
   CheckCircle2,
@@ -22,16 +24,39 @@ import {
   Sun,
   Upload,
   X,
-  Zap,
+  Orbit,
 } from "lucide-react";
 import { actionError, ApiError, api } from "./api";
+import "./styles.css";
+import { AuthScreen } from "./AuthScreen";
+import { Home } from "./Home";
+import { Tasks } from "./Tasks";
+import { Integrations } from "./Integrations";
+import type { TaskSnapshot } from "../shared/tasks";
+import type { IntegrationSnapshot } from "../shared/integrations";
+import { HOME_FONTS, HOME_FONT_IDS, type HomeFontId } from "../shared/home-fonts";
 import { Dialog } from "./Dialog";
 import { ManagementDialog, type ManagementAction } from "./Management";
 import type { Group, Service, ServiceEvent, User } from "../server/types";
-import "./styles.css";
 
 type Status = Service["status"];
-type View = "overview" | "services" | "favorites" | "events" | "settings" | `group:${number}`;
+type View = "overview" | "services" | "favorites" | "tasks" | "integrations" | "events" | "settings" | "groups" | `group:${number}`;
+
+const viewPaths: Record<string, string> = {
+  overview: "#/", tasks: "#/manage/tasks", services: "#/manage/services",
+  favorites: "#/manage/favorites", groups: "#/manage/groups",
+  integrations: "#/manage/integrations", events: "#/manage/events", settings: "#/manage/settings",
+};
+function routeView(): View {
+  const hash = window.location.hash;
+  const match = Object.entries(viewPaths).find(([, path]) => path === hash);
+  if (match) return match[0] as View;
+  const group = /^#\/manage\/groups\/([1-9]\d*)$/.exec(hash)?.[1];
+  return group && Number.isSafeInteger(Number(group)) ? ("group:" + group) as View : "overview";
+}
+function viewPath(view: View): string {
+  return view.startsWith("group:") ? "#/manage/groups/" + view.slice(6) : viewPaths[view] ?? "#/";
+}
 
 function loadDirectory() {
   return Promise.all([
@@ -52,22 +77,34 @@ const statusMeta: Record<Status, { label: string; color: string }> = {
   unknown: { label: "未检查", color: "gray" },
 };
 
+function readPreference(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function writePreference(key: string, value: string): void {
+  try { localStorage.setItem(key, value); } catch { /* Optional persistence must not block the session. */ }
+}
+
 function App() {
   const [services, setServices] = useState<Service[]>([]),
     [groups, setGroups] = useState<Group[]>([]),
-    [active, setActive] = useState<View>("overview"),
+    [active, setActive] = useState<View>(routeView),
     [query, setQuery] = useState(""),
     [statusFilter, setStatusFilter] = useState<Status | "all">("all"),
     [favorites, setFavorites] = useState<string[]>(() => {
       try {
-        const saved = JSON.parse(localStorage.getItem("nexus-favorites") || "[]");
+        const saved = JSON.parse(readPreference("nexus-favorites") || "[]");
         return Array.isArray(saved) ? saved.filter((value) => typeof value === "string") : [];
       } catch {
         return [];
       }
     }),
     [selected, setSelected] = useState<Service | null>(null),
-    [dark, setDark] = useState(true),
+    [dark, setDark] = useState(() => readPreference("nexus-theme") !== "light"),
+    [homeFont, setHomeFont] = useState<HomeFontId>("calligraphy"),
+    [homeFontDraft, setHomeFontDraft] = useState<HomeFontId>("calligraphy"),
+    [homeFontStatus, setHomeFontStatus] = useState(""),
+    [homeFontLoading, setHomeFontLoading] = useState(false),
+    [homeFontSaving, setHomeFontSaving] = useState(false),
     [loading, setLoading] = useState(false),
     [refreshing, setRefreshing] = useState(false),
     [menu, setMenu] = useState(false),
@@ -82,24 +119,210 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const canWrite = user?.role === "admin" || user?.role === "operator";
   const canDelete = user?.role === "admin";
-  const [authError, setAuthError] = useState("");
-  const [events, setEvents] = useState<ServiceEvent[]>([]);
+  const inManagement = active !== "overview";
+  const [wideNavigation, setWideNavigation] = useState(() => window.matchMedia("(min-width: 901px)").matches);
   useEffect(() => {
-    const saved = localStorage.getItem("nexus-theme");
-    if (saved) setDark(saved === "dark");
+    const media = window.matchMedia("(min-width: 901px)");
+    const update = () => { setWideNavigation(media.matches); setMenu(false); };
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
   }, []);
   useEffect(() => {
+    const update = () => setActive(routeView());
+    window.addEventListener("hashchange", update);
+    window.addEventListener("popstate", update);
+    return () => {
+      window.removeEventListener("hashchange", update);
+      window.removeEventListener("popstate", update);
+    };
+  }, []);
+  useEffect(() => {
+    const path = viewPath(active);
+    if (window.location.hash !== path) window.history.pushState(null, "", path);
+    setMenu(false);
+    window.scrollTo({ top: 0, behavior: "instant" });
+    document.title = inManagement ? "Nexus · 管理" : "Nexus · 工作台";
+  }, [active, inManagement]);
+  const [authError, setAuthError] = useState("");
+  const [usernameLogin, setUsernameLogin] = useState(false);
+  const [events, setEvents] = useState<ServiceEvent[]>([]);
+  const [directoryState, setDirectoryState] = useState<"loading" | "ready" | "error">("loading");
+  const [loggingOut, setLoggingOut] = useState(false);
+  const logoutPending = useRef(false);
+  const [taskSnapshot, setTaskSnapshot] = useState<TaskSnapshot | null>(null);
+  const [taskLoading, setTaskLoading] = useState(false);
+  const [taskError, setTaskError] = useState("");
+  const [integrationSnapshot, setIntegrationSnapshot] = useState<IntegrationSnapshot | null>(null);
+  const [integrationLoading, setIntegrationLoading] = useState(false);
+  const [integrationError, setIntegrationError] = useState("");
+  const dataGeneration = useRef(0);
+  const taskRequest = useRef(0);
+  const integrationRequest = useRef(0);
+  const homeFontRequest = useRef(0);
+  const directoryRequest = useRef(0);
+  const checkRequest = useRef(0);
+  const navRef = useRef<HTMLElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (auth !== "ready") return;
+    const frame = requestAnimationFrame(() => {
+      if (document.querySelector("dialog[open]")) return;
+      const target = mainRef.current?.querySelector<HTMLElement>("h1") || mainRef.current;
+      if (target) {
+        target.tabIndex = -1;
+        target.focus({ preventScroll: true });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [active, auth]);
+  useEffect(() => {
+    if (!menu || !inManagement || wideNavigation) return;
+    const mobile = window.matchMedia("(max-width: 900px)");
+    const nav = navRef.current;
+    const main = mainRef.current;
+    if (!nav || !main) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const overflow = document.body.style.overflow;
+    const wasInert = main.inert;
+    main.inert = true;
+    document.body.style.overflow = "hidden";
+    const controls = () => [...nav.querySelectorAll<HTMLElement>("button:not([disabled]),a[href],[tabindex='0']")]
+      .filter(element => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== "hidden");
+    let frame = 0;
+    let focusAttempts = 0;
+    const focusNavigation = () => {
+      if (nav.contains(document.activeElement)) return;
+      controls()[0]?.focus();
+      if (!nav.contains(document.activeElement) && focusAttempts++ < 20) frame = requestAnimationFrame(focusNavigation);
+    };
+    // Visibility may still be at the hidden end of the CSS transition.
+    frame = requestAnimationFrame(focusNavigation);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); setMenu(false); return; }
+      if (event.key !== "Tab") return;
+      const items = controls();
+      const first = items[0], last = items[items.length - 1];
+      if (!first || !last) { event.preventDefault(); return; }
+      if (!nav.contains(document.activeElement)) {
+        event.preventDefault(); (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus();
+      }
+    };
+    const onResize = () => setMenu(false);
+    document.addEventListener("keydown", onKey);
+    mobile.addEventListener("change", onResize);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", onKey);
+      mobile.removeEventListener("change", onResize);
+      main.inert = wasInert;
+      document.body.style.overflow = overflow;
+      if (opener?.isConnected && !document.querySelector("dialog[open]")) opener.focus();
+    };
+  }, [menu, inManagement, wideNavigation]);
+  function activateSession(nextUser: User) {
+    dataGeneration.current += 1;
+    setUser(nextUser);
+    setAuth("ready");
+  }
+  async function refreshTasks(generation = dataGeneration.current) {
+    const request = ++taskRequest.current;
+    setTaskLoading(true);
+    setTaskError("");
+    try {
+      const result = await api<{ snapshot: TaskSnapshot }>("/api/tasks");
+      if (dataGeneration.current === generation && taskRequest.current === request) setTaskSnapshot(result.snapshot);
+    } catch {
+      if (dataGeneration.current === generation && taskRequest.current === request) setTaskError("无法读取任务快照，请稍后重试。");
+    } finally {
+      if (dataGeneration.current === generation && taskRequest.current === request) setTaskLoading(false);
+    }
+  }
+  async function saveHomeFont() {
+    if (user?.role !== "admin" || homeFontSaving) return;
+    const generation = dataGeneration.current;
+    setHomeFontSaving(true);
+    setHomeFontStatus("");
+    try {
+      const result = await api<{ homeFont: HomeFontId }>("/api/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ homeFont: homeFontDraft }),
+      });
+      if (dataGeneration.current !== generation) return;
+      setHomeFont(result.homeFont);
+      setHomeFontDraft(result.homeFont);
+      setHomeFontStatus("首页字体已保存。");
+    } catch {
+      if (dataGeneration.current === generation) setHomeFontStatus("保存失败，请检查会话后重试。");
+    } finally {
+      if (dataGeneration.current === generation) setHomeFontSaving(false);
+    }
+  }
+  async function refreshIntegrations(generation = dataGeneration.current) {
+    const request = ++integrationRequest.current;
+    setIntegrationLoading(true);
+    setIntegrationError("");
+    try {
+      const result = await api<{ snapshot: IntegrationSnapshot }>("/api/integrations");
+      if (dataGeneration.current === generation && integrationRequest.current === request) setIntegrationSnapshot(result.snapshot);
+    } catch {
+      if (dataGeneration.current === generation && integrationRequest.current === request) setIntegrationError("无法读取服务接入状态，请稍后重试。");
+    } finally {
+      if (dataGeneration.current === generation && integrationRequest.current === request) setIntegrationLoading(false);
+    }
+  }
+  useEffect(() => {
+    const request = ++homeFontRequest.current;
+    const generation = dataGeneration.current;
+    if (auth !== "ready") {
+      setHomeFont("calligraphy");
+      setHomeFontDraft("calligraphy");
+      setHomeFontStatus("");
+      setHomeFontLoading(false);
+      return;
+    }
+    setHomeFontLoading(true);
+    api<{ homeFont: HomeFontId }>("/api/settings").then((result) => {
+      if (dataGeneration.current !== generation || homeFontRequest.current !== request) return;
+      const selected = HOME_FONT_IDS.includes(result.homeFont) ? result.homeFont : "calligraphy";
+      setHomeFont(selected);
+      setHomeFontDraft(selected);
+      setHomeFontStatus("");
+    }).catch(() => {
+      if (dataGeneration.current === generation && homeFontRequest.current === request) setHomeFontStatus("无法读取首页字体设置，请刷新重试。");
+    }).finally(() => {
+      if (dataGeneration.current === generation && homeFontRequest.current === request) setHomeFontLoading(false);
+    });
+    return () => { homeFontRequest.current += 1; };
+  }, [auth]);
+  useEffect(() => {
+    const generation = dataGeneration.current;
+    if (auth !== "ready") {
+      setTaskSnapshot(null); setTaskLoading(false); setTaskError("");
+      setIntegrationSnapshot(null); setIntegrationLoading(false); setIntegrationError("");
+      return;
+    }
+    void refreshTasks(generation);
+    void refreshIntegrations(generation);
+    return () => { dataGeneration.current += 1; };
+  }, [auth]);
+  useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
-    localStorage.setItem("nexus-theme", dark ? "dark" : "light");
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", dark ? "#060709" : "#f4f5f7");
+    writePreference("nexus-theme", dark ? "dark" : "light");
   }, [dark]);
   useEffect(() => {
-    localStorage.setItem("nexus-favorites", JSON.stringify(favorites));
+    writePreference("nexus-favorites", JSON.stringify(favorites));
   }, [favorites]);
   useEffect(() => {
     if (auth !== "ready") return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k" && !document.querySelector("dialog[open]")) {
         e.preventDefault();
+        setMenu(false);
         setCommandOpen(true);
       }
       if (e.key === "Escape") setMenu(false);
@@ -111,7 +334,8 @@ function App() {
     let live = true;
     (async () => {
       try {
-        const st = await api<{ bootstrapped: boolean }>("/api/auth/status");
+        const st = await api<{ bootstrapped: boolean; usernameLoginEnabled?: boolean }>("/api/auth/status");
+        if (live) setUsernameLogin(st.usernameLoginEnabled === true);
         if (!st.bootstrapped) {
           if (live) setAuth("bootstrap");
           return;
@@ -119,8 +343,7 @@ function App() {
         try {
           const me = await api<{ user: User }>("/api/auth/me");
           if (live) {
-            setUser(me.user);
-            setAuth("ready");
+            activateSession(me.user);
           }
         } catch (e) {
           if (!live) return;
@@ -144,16 +367,23 @@ function App() {
   useEffect(() => {
     if (auth !== "ready") return;
     let live = true;
+    const generation = dataGeneration.current;
+    const request = ++directoryRequest.current;
+    setDirectoryState("loading");
     loadDirectory()
       .then(([s, g, e]) => {
-        if (live) {
+        if (live && dataGeneration.current === generation && directoryRequest.current === request) {
+          setDirectoryState("ready");
           setServices(s.services);
           setGroups(g.groups);
           setEvents(e.events);
         }
       })
       .catch(() => {
-        if (live) setError("无法读取面板数据，请重新登录");
+        if (live && dataGeneration.current === generation && directoryRequest.current === request) {
+          setDirectoryState("error");
+          setError("无法读取面板数据，请重试或重新登录");
+        }
       });
     return () => {
       live = false;
@@ -177,68 +407,72 @@ function App() {
     if (active === "favorites") return filtered.filter((s) => favorites.includes(s.slug));
     return filtered.filter((s) => s.groupId === activeGroup?.id);
   }, [active, activeGroup, favorites, filtered]);
-  const { counts, averageLatency } = useMemo(() => {
-    const counts = { total: services.length, healthy: 0, degraded: 0, offline: 0, unknown: 0 };
-    let latencyTotal = 0;
-    let samples = 0;
-    for (const service of services) {
-      counts[service.status]++;
-      if (service.latencyMs !== null) {
-        samples++;
-        latencyTotal += service.latencyMs;
-      }
-    }
-    return { counts, averageLatency: samples ? Math.round(latencyTotal / samples) : null };
-  }, [services]);
   async function check(s: Service) {
+    const generation = dataGeneration.current;
+    const request = ++checkRequest.current;
+    const current = () => dataGeneration.current === generation && checkRequest.current === request;
     setLoading(true);
     setError("");
     try {
       const r = await api<{ service: Service }>(`/api/services/${s.id}/check`, {
         method: "POST",
       });
+      if (!current()) return;
       setServices((xs) => xs.map((x) => (x.id === s.id ? r.service : x)));
-      setSelected((current) => current?.id === s.id ? r.service : current);
-      const { events } = await loadEvents();
-      setEvents(events);
+      setSelected((selectedService) => selectedService?.id === s.id ? r.service : selectedService);
+      const result = await loadEvents();
+      if (current()) setEvents(result.events);
     } catch (cause) {
-      setError(actionError(cause, "检查失败，请确认服务地址和网络连接"));
+      if (current()) setError(actionError(cause, "检查失败，请确认服务地址和网络连接"));
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }
   async function saveService(data: Record<string, unknown>) {
     if (serviceForm === null) return;
+    const generation = dataGeneration.current;
+    const form = serviceForm;
     const result = await api<{ service: Service }>(
-      serviceForm ? `/api/services/${serviceForm.id}` : "/api/services",
-      { method: serviceForm ? "PATCH" : "POST", body: JSON.stringify(data) },
+      form ? `/api/services/${form.id}` : "/api/services",
+      { method: form ? "PATCH" : "POST", body: JSON.stringify(data) },
     );
-    setServices((current) => serviceForm
+    if (dataGeneration.current !== generation) return;
+    setServices((current) => form
       ? current.map((s) => s.id === result.service.id ? result.service : s)
       : [...current, result.service]);
-    if (serviceForm && serviceForm.slug !== result.service.slug) {
+    if (form && form.slug !== result.service.slug) {
       setFavorites((current) => current.map((slug) =>
-        slug === serviceForm.slug ? result.service.slug : slug));
+        slug === form.slug ? result.service.slug : slug));
     }
     setServiceForm(null);
     setSelected(result.service);
     setError("");
   }
   async function deleteService(s: Service) {
+    const generation = dataGeneration.current;
     if (!window.confirm(`删除服务“${s.name}”？`)) return;
     try {
       await api(`/api/services/${s.id}`, { method: "DELETE" });
+      if (dataGeneration.current !== generation) return;
       setServices((xs) => xs.filter((x) => x.id !== s.id));
       setFavorites((current) => current.filter((slug) => slug !== s.slug));
       setSelected(null);
     } catch (cause) {
-      setError(actionError(cause, "删除失败，请稍后重试。"));
+      if (dataGeneration.current === generation) setError(actionError(cause, "删除失败，请稍后重试。"));
     }
   }
   async function refreshData() {
+    const generation = dataGeneration.current;
+    const request = ++directoryRequest.current;
+    const current = () => dataGeneration.current === generation && directoryRequest.current === request;
+    void refreshTasks(generation);
+    void refreshIntegrations(generation);
+    setDirectoryState("loading");
     setRefreshing(true);
     try {
       const [s, g, e] = await loadDirectory();
+      if (!current()) return;
+      setDirectoryState("ready");
       setServices(s.services);
       setGroups(g.groups);
       setEvents(e.events);
@@ -246,9 +480,12 @@ function App() {
         !g.groups.some((group) => `group:${group.id}` === current) ? "services" : current);
       setError("");
     } catch {
-      setError("刷新失败，请确认登录状态和服务连接");
+      if (current()) {
+        setDirectoryState("error");
+        setError("刷新失败，请确认登录状态和服务连接");
+      }
     } finally {
-      setRefreshing(false);
+      if (current()) setRefreshing(false);
     }
   }
   function toggleFavorite(service: Service) {
@@ -258,15 +495,72 @@ function App() {
         : [...current, service.slug],
     );
   }
+  async function logout() {
+    if (logoutPending.current) return;
+    const generation = dataGeneration.current;
+    logoutPending.current = true;
+    setLoggingOut(true);
+    try {
+      try {
+        await api("/api/auth/logout", { method: "POST" });
+      } catch (cause) {
+        if (dataGeneration.current !== generation) return;
+        if (!(cause instanceof ApiError) || cause.status !== 401) {
+          setError("退出失败，请重试");
+          return;
+        }
+      }
+      if (dataGeneration.current !== generation) return;
+      dataGeneration.current += 1;
+      directoryRequest.current += 1;
+      checkRequest.current += 1;
+      setSelected(null);
+      setServiceForm(null);
+      setManagementAction(null);
+      setCommandOpen(false);
+      setLoading(false);
+      setRefreshing(false);
+      setQuery("");
+      setStatusFilter("all");
+      setTaskSnapshot(null); setTaskLoading(false); setTaskError("");
+      setIntegrationSnapshot(null); setIntegrationLoading(false); setIntegrationError("");
+      setAuth("login");
+      setUser(null);
+      setServices([]);
+      setDirectoryState("loading");
+      setGroups([]);
+      setEvents([]);
+      setActive("overview");
+      setMenu(false);
+      setNotice("");
+      setError("");
+    } finally {
+      logoutPending.current = false;
+      setLoggingOut(false);
+    }
+  }
+  useEffect(() => {
+    if (!inManagement) {
+      setServiceForm(null);
+      setManagementAction(null);
+    }
+  }, [inManagement]);
+  const viewGeneration = dataGeneration.current;
   const activeTitle =
     active === "overview"
-      ? "总览"
+      ? "我的空间"
       : active === "services"
-        ? "全部服务"
+        ? "服务管理"
         : active === "favorites"
           ? "收藏服务"
+          : active === "tasks"
+            ? "任务中心"
+            : active === "integrations"
+              ? "服务接入"
           : active === "events"
             ? "运行事件"
+            : active === "groups"
+              ? "分组管理"
             : active === "settings"
               ? "设置"
               : (activeGroup?.name ?? "全部服务");
@@ -284,6 +578,7 @@ function App() {
     return (
       <AuthScreen
         mode={auth}
+        usernameLogin={usernameLogin}
         error={authError}
         onSubmit={async (data) => {
           setAuthError("");
@@ -304,44 +599,54 @@ function App() {
                 body: JSON.stringify(data),
               });
             }
-            setUser(res.user);
-            setAuth("ready");
+            activateSession(res.user);
           } catch (cause) {
             if (cause instanceof ApiError && cause.status === 409) {
               setAuth("login");
               setAuthError("已经初始化，请登录");
             } else if (cause instanceof ApiError && cause.status === 429) {
               setAuthError("尝试次数过多，请稍后再试");
+            } else if (cause instanceof ApiError && (cause.code === "origin_forbidden" || cause.status === 403)) {
+              setAuthError("当前访问地址未被服务器允许，请联系管理员检查公网代理配置。");
+            } else if (cause instanceof ApiError && cause.status === 400 && cause.code === "invalid_input") {
+              setAuthError(auth === "bootstrap" ? "请填写有效邮箱，密码至少12个字符。" : usernameLogin ? "请填写有效的用户名或邮箱和密码。" : "请填写有效邮箱和密码。");
+            } else if (auth === "login" && cause instanceof ApiError && cause.status === 401) {
+              setAuthError("邮箱或密码不正确");
+            } else if (cause instanceof ApiError && cause.status >= 500) {
+              setAuthError("认证服务暂时不可用，请稍后重试。");
+            } else if (!(cause instanceof ApiError)) {
+              setAuthError("无法连接认证服务，请检查网络后重试。");
             } else {
-              setAuthError("邮箱或密码不正确，或密码不符合要求");
+              setAuthError("认证请求失败，请稍后重试。");
             }
           }
         }}
       />
     );
   return (
-    <div className="app-shell">
-      <aside className={`sidebar ${menu ? "open" : ""}`}>
+    <div className={"app-shell " + (inManagement ? "admin-shell" : "website-shell")}>
+      {inManagement && <aside ref={navRef} id="primary-navigation" inert={!wideNavigation && !menu} role={menu && !wideNavigation ? "dialog" : undefined}
+        aria-modal={menu && !wideNavigation ? true : undefined} aria-label={menu && !wideNavigation ? "导航" : "管理导航"}
+        className={"sidebar " + (wideNavigation || menu ? "open" : "")}>
         <div className="brand">
           <div className="brand-mark">
-            <Zap size={17} />
+            <Orbit size={21} />
           </div>
-          <span>NEXUS</span>
-          <small>CONTROL</small>
+          <span>Nexus <small>管理</small></span>
         </div>
         <button className="close-nav" aria-label="关闭导航" onClick={() => setMenu(false)}>
           <X size={18} />
         </button>
         <nav>
           <button
-            className={active === "overview" ? "active" : ""}
+            className=""
             onClick={() => {
               setActive("overview");
               setMenu(false);
             }}
           >
             <LayoutDashboard size={17} />
-            总览
+            返回首页
           </button>
           <div className="nav-label">服务目录</div>
           <button
@@ -352,8 +657,8 @@ function App() {
             }}
           >
             <CircleDot size={17} />
-            全部服务
-            <em>{services.length}</em>
+            服务管理
+            <em>{directoryState === "ready" || services.length > 0 ? services.length : "—"}</em>
           </button>
           <button
             className={active === "favorites" ? "active" : ""}
@@ -366,6 +671,9 @@ function App() {
             收藏服务
             <em>{favorites.length}</em>
           </button>
+          <button className={active === "groups" ? "active" : ""} onClick={() => { setActive("groups"); setMenu(false); }}>
+            <FolderPlus size={17} />分组管理
+          </button>
           {groups.map((g) => (
             <button
               key={g.id}
@@ -376,23 +684,28 @@ function App() {
               }}
             >
               <span className="group-dot" style={{ background: g.color }} />
-              {g.name}
+              <span className="nav-text">{g.name}</span>
               <em>{services.filter((s) => s.groupId === g.id).length}</em>
             </button>
           ))}
+          <div className="nav-label">运行概况</div>
+          <button
+            className={active === "tasks" ? "active" : ""}
+            onClick={() => { setActive("tasks"); setMenu(false); }}
+          >
+            <CalendarClock size={17} />
+            任务中心
+          </button>
+          <button
+            className={active === "integrations" ? "active" : ""}
+            onClick={() => { setActive("integrations"); setMenu(false); }}
+          >
+            <Plug2 size={17} />
+            服务接入
+          </button>
           <div className="nav-label">系统</div>
           {canWrite && (
             <>
-              <button
-                className="nav-action"
-                onClick={() => {
-                  setManagementAction({ type: "group" });
-                  setMenu(false);
-                }}
-              >
-                <FolderPlus size={17} />
-                添加分组
-              </button>
               {canDelete && (
                 <button
                   className="nav-action"
@@ -446,119 +759,63 @@ function App() {
               className="logout"
               title="退出登录"
               aria-label="退出登录"
-              onClick={async () => {
-                try {
-                  await api("/api/auth/logout", { method: "POST" });
-                } catch (cause) {
-                  if (!(cause instanceof ApiError) || cause.status !== 401) {
-                    setError("退出失败，请重试");
-                    return;
-                  }
-                }
-                setAuth("login");
-                setUser(null);
-                setServices([]);
-                setGroups([]);
-                setEvents([]);
-                setActive("overview");
-                setMenu(false);
-                setNotice("");
-                setError("");
-              }}
+              disabled={loggingOut}
+              aria-busy={loggingOut}
+              onClick={logout}
             >
               <LogOut size={16} />
             </button>
           </div>
         </div>
-      </aside>
-      <main className="main">
-        <header className="topbar">
-          <button
-            className="menu-btn"
-            aria-label="打开导航"
-            aria-expanded={menu}
-            onClick={() => setMenu(true)}
-          >
-            <Menu size={20} />
-          </button>
-          <div className="crumb">
-            <span>Workspace</span>
-            <ChevronRight size={14} />
-            <strong>
-              {activeTitle}
-            </strong>
-          </div>
-          <div className="top-actions">
-            <button
-              className="search-trigger"
-              aria-label="搜索服务"
-              onClick={() => setCommandOpen(true)}
-            >
-              <Search size={16} />
-              <span>搜索服务...</span>
-              <kbd>⌘ K</kbd>
-            </button>
-            <button
-              className="icon-btn"
-              onClick={() => setDark(!dark)}
-              aria-label="切换主题"
-            >
-              {dark ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
-            <button
-              className="icon-btn"
-              aria-label="查看运行事件"
-              onClick={() => setActive("events")}
-            >
-              <BellDot />
-            </button>
-          </div>
-        </header>
+      </aside>}
+      {inManagement && menu && !wideNavigation && <div className="nav-scrim" aria-hidden="true" onClick={() => setMenu(false)} />}
+      <main ref={mainRef} className="main" tabIndex={-1}>
+        {inManagement && (
+          <header className="topbar admin-topbar">
+            <button className="menu-btn" aria-label="打开导航" aria-controls="primary-navigation" aria-haspopup="dialog" aria-expanded={menu} onClick={() => setMenu(true)}><Menu size={21} aria-hidden="true" /></button>
+            <div className="admin-breadcrumb"><span>管理</span><ChevronRight size={14} aria-hidden="true" /><strong>{activeTitle}</strong></div>
+            <div className="top-actions">
+              <button className="search-trigger" aria-label="搜索服务" onClick={() => setCommandOpen(true)}><Search size={16} aria-hidden="true" /><span>搜索服务</span><kbd>⌘ K</kbd></button>
+              <button className="icon-btn" onClick={() => setDark(!dark)} aria-label="切换主题">{dark ? <Sun size={19} aria-hidden="true" /> : <Moon size={19} aria-hidden="true" />}</button>
+              <button className="back-to-site" onClick={() => setActive("overview")}><ArrowUpRight size={16} aria-hidden="true" />返回首页</button>
+            </div>
+          </header>
+        )}
         <div className="content">
-          <div className="page-head">
-            <div>
-              <div className="eyebrow">
-                SYSTEM OVERVIEW <span>•</span>{" "}
-                {new Date().toLocaleDateString("zh-CN", {
-                  month: "short",
-                  day: "numeric",
-                })}
-              </div>
-              <h1>{active === "overview" ? "运行总览" : activeTitle}</h1>
-              <p>
-                {active === "overview"
-                  ? "所有服务和基础设施的实时状态。"
-                  : active === "events"
+          {inManagement && active !== "integrations" && active !== "tasks" && (
+            <div className="page-head">
+              <div>
+                <h1>{activeTitle}</h1>
+                <p>
+                  {active === "events"
                     ? "近期健康检查与管理操作记录。"
+                    : active === "groups"
+                      ? "整理服务的分类与顺序。"
                     : active === "settings"
                       ? "账户信息与本地显示偏好。"
                       : active === "favorites"
                         ? "快速访问你标记的重要服务。"
                         : "查看并管理已配置的服务。"}
-              </p>
-            </div>
-            <div className="head-actions">
-              <button
-                className="secondary"
-                aria-label="刷新数据"
-                onClick={refreshData}
-                disabled={refreshing}
-              >
-                <RefreshCw size={15} className={refreshing ? "spin" : ""} />
-                {refreshing ? "刷新中..." : "刷新数据"}
-              </button>
-              {canWrite && (
+                </p>
+              </div>
+              <div className="head-actions">
                 <button
-                  className="primary"
-                  aria-label="添加服务"
-                  onClick={() => setServiceForm(false)}
+                  className="secondary"
+                  aria-label="刷新数据"
+                  onClick={refreshData}
+                  disabled={refreshing}
                 >
-                  <Plus size={16} />
-                  添加服务
+                  <RefreshCw size={15} className={refreshing ? "spin" : ""} />
+                  {refreshing ? "刷新中..." : "刷新数据"}
                 </button>
-              )}
+                {canWrite && (active === "groups" ? (
+                  <button className="primary" onClick={() => setManagementAction({ type: "group" })}><FolderPlus size={16} aria-hidden="true" />新建分组</button>
+                ) : active !== "settings" && active !== "events" && (
+                  <button className="primary" aria-label="添加服务" onClick={() => setServiceForm(false)}><Plus size={16} aria-hidden="true" />添加服务</button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           {error && (
             <div className="toast" role="alert">
               <AlertTriangle size={16} />
@@ -578,104 +835,36 @@ function App() {
             </div>
           )}
           {active === "overview" ? (
-            <>
-              <section className="metrics">
-                <Metric
-                  label="服务总数"
-                  value={counts.total}
-                  hint="已配置服务"
-                  icon={<CircleDot />}
-                  tone="blue"
-                />
-                <Metric
-                  label="运行正常"
-                  value={counts.healthy}
-                  hint={counts.total === counts.unknown
-                    ? "暂无检查结果"
-                    : `${Math.round(100 * counts.healthy / (counts.total - counts.unknown))}% 已检查服务正常`}
-                  icon={<CheckCircle2 />}
-                  tone="green"
-                />
-                <Metric
-                  label="需要关注"
-                  value={counts.degraded + counts.offline}
-                  hint={`${counts.degraded} 降级 · ${counts.offline} 离线`}
-                  icon={<AlertTriangle />}
-                  tone="amber"
-                />
-                <Metric
-                  label="平均延迟"
-                  value={
-                    averageLatency === null
-                      ? "—"
-                      : `${averageLatency} ms`
-                  }
-                  hint="各服务最近一次检查"
-                  icon={<Activity />}
-                  tone="purple"
-                />
-              </section>
-              <section className="grid-main">
-                <div className="panel services-panel">
-                  <PanelHeader
-                    title="服务状态"
-                    count={services.length}
-                    action="查看全部"
-                    onAction={() => setActive("services")}
-                  />
-                  <div className="service-list">
-                    {services.slice(0, 6).map((s) => (
-                      <ServiceRow
-                        key={s.id}
-                        service={s}
-                        onClick={() => setSelected(s)}
-                      />
-                    ))}
-                    {services.length === 0 && (
-                      <div className="empty-state">
-                        <CircleDot />
-                        <strong>还没有服务</strong>
-                        <span>添加一个服务来开始监控运行状态。</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="panel events-panel">
-                  <PanelHeader
-                    title="最近事件"
-                    action="查看全部"
-                    onAction={() => setActive("events")}
-                  />
-                  <div className="event-list">
-                    {events.slice(0, 5).map((e) => (
-                      <Event
-                        key={e.id}
-                        icon={
-                          e.type === "health_check" ? (
-                            <Activity />
-                          ) : (
-                            <CheckCircle2 />
-                          )
-                        }
-                        title={e.message}
-                        detail={new Date(e.createdAt).toLocaleString("zh-CN")}
-                        tone={e.type === "health_check" ? "blue" : "green"}
-                      />
-                    ))}
-                    {events.length === 0 && (
-                      <div className="empty-state compact">
-                        <Activity />
-                        <strong>暂无事件</strong>
-                        <span>服务事件会显示在这里。</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
-            </>
+            <Home
+              services={services}
+              groups={groups}
+              favorites={favorites}
+              homeFont={homeFont}
+              directoryState={directoryState}
+              refreshing={refreshing}
+              taskSnapshot={taskSnapshot}
+              taskLoading={taskLoading}
+              taskError={taskError}
+              onRefresh={refreshData}
+              onRefreshTasks={() => void refreshTasks()}
+              onManage={() => setActive("services")}
+              onSearch={() => setCommandOpen(true)}
+              onDetails={setSelected}
+              onToggleFavorite={toggleFavorite}
+            />
+          ) : active === "tasks" ? (
+            <Tasks snapshot={taskSnapshot} loading={taskLoading} error={taskError} onRefresh={() => void refreshTasks()} />
+          ) : active === "integrations" ? (
+            <Integrations snapshot={integrationSnapshot} loading={integrationLoading} error={integrationError}
+              onRefresh={() => void refreshIntegrations()}
+              onOpenService={slug => {
+                const service = services.find(item => item.slug === slug);
+                if (service) setSelected(service);
+                else setNotice("此接入尚未关联到当前服务目录。");
+              }} />
           ) : active === "events" ? (
             <section className="panel full-panel">
-              <PanelHeader title="运行事件" count={events.length} action="" />
+              <PanelHeader title="运行事件" count={directoryState === "ready" || events.length > 0 ? events.length : undefined} action="" />
               <div className="event-list">
                 {events.map((e) => (
                   <Event
@@ -689,10 +878,24 @@ function App() {
                 {events.length === 0 && (
                   <div className="empty-state">
                     <Activity />
-                    <strong>暂无事件</strong>
-                    <span>服务事件会显示在这里。</span>
+                    <strong>{directoryState === "loading" ? "正在读取事件" : directoryState === "error" ? "事件尚未读取" : "暂无事件"}</strong>
+                    <span>{directoryState === "ready" ? "服务事件会显示在这里。" : "完成读取后再确认事件记录。"}</span>
                   </div>
                 )}
+              </div>
+            </section>
+          ) : active === "groups" ? (
+            <section className="panel full-panel group-management" aria-label="分组管理">
+              <PanelHeader title="服务分组" count={directoryState === "ready" || groups.length > 0 ? groups.length : undefined} action="" />
+              <div className="group-management-list">
+                {groups.map(group => (
+                  <div className="group-management-row" key={group.id}>
+                    <span className="group-dot" style={{ background: group.color }} aria-hidden="true" />
+                    <div><strong>{group.name}</strong><span>{services.filter(service => service.groupId === group.id).length} 个服务</span></div>
+                    {canWrite && <button className="secondary" aria-label={"编辑分组" + group.name} onClick={() => setManagementAction({ type: "group", group })}>编辑分组</button>}
+                  </div>
+                ))}
+                {!groups.length && <div className="empty-state"><FolderPlus /><strong>{directoryState === "loading" ? "正在读取分组" : directoryState === "error" ? "分组尚未读取" : "还没有分组"}</strong><span>{directoryState === "ready" ? canWrite ? "点击“新建分组”，整理你的服务入口。" : "管理员创建的分组会显示在这里。" : "读取完成后再确认现有分组。"}</span></div>}
               </div>
             </section>
           ) : active === "settings" ? (
@@ -709,11 +912,43 @@ function App() {
                 <div className="setting-row">
                   <div>
                     <strong>外观主题</strong>
-                    <span>选择控制台的显示主题。</span>
+                    <span>选择工作台的显示主题。</span>
                   </div>
                   <button className="secondary" onClick={() => setDark((value) => !value)}>
                     {dark ? "深色模式" : "浅色模式"}
                   </button>
+                </div>
+                <div className="setting-row home-font-setting">
+                  <div>
+                    <strong>首页字体</strong>
+                    <span>仅调整首页展示标题和内嵌任务标题。</span>
+                  </div>
+                  {user?.role === "admin" ? (
+                    <div className="home-font-control">
+                      <div>
+                        <label className="sr-only" htmlFor="home-font-choice">首页字体</label>
+                        <select
+                          id="home-font-choice"
+                          value={homeFontDraft}
+                          disabled={homeFontLoading || homeFontSaving}
+                          onChange={(event) => { setHomeFontDraft(event.target.value as HomeFontId); setHomeFontStatus(""); }}
+                        >
+                          {HOME_FONT_IDS.map((font) => <option key={font} value={font}>{HOME_FONTS[font].label}</option>)}
+                        </select>
+                        <span className="home-font-preview" style={{ fontFamily: HOME_FONTS[homeFontDraft].family }}>
+                          常用服务 · Nexus 工作台
+                        </span>
+                      </div>
+                      <div className="home-font-save">
+                        <button className="secondary" onClick={() => void saveHomeFont()} disabled={homeFontLoading || homeFontSaving || homeFontDraft === homeFont}>
+                          {homeFontSaving ? "保存中…" : "保存字体"}
+                        </button>
+                        <span role="status" aria-live="polite">{homeFontStatus || HOME_FONTS[homeFont].label + " · 已应用"}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="setting-value">{HOME_FONTS[homeFont].label}</span>
+                  )}
                 </div>
                 <div className="setting-row">
                   <div>
@@ -722,34 +957,17 @@ function App() {
                   </div>
                   <span className="setting-value">{favorites.length}</span>
                 </div>
-                {canWrite && (
-                  <div className="setting-row">
-                    <div><strong>服务分组</strong></div>
-                    <div className="setting-actions">
-                      <button className="secondary" onClick={() => setManagementAction({ type: "group" })}>
-                        <FolderPlus size={15} />
-                        新建分组
-                      </button>
-                      {groups.map((group) => (
-                        <button
-                          key={group.id}
-                          className="secondary"
-                          onClick={() => setManagementAction({ type: "group", group })}
-                        >
-                          <span className="group-dot" style={{ background: group.color }} />
-                          {group.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <div className="setting-row">
+                  <div><strong>服务分组</strong><span>在分组管理中整理服务分类。</span></div>
+                  <button className="secondary" onClick={() => setActive("groups")}>分组管理</button>
+                </div>
               </div>
             </section>
           ) : (
             <section className="panel full-panel">
               <PanelHeader
                 title={active === "favorites" ? "收藏服务" : "服务列表"}
-                count={activeServices.length}
+                count={directoryState === "ready" || services.length > 0 ? activeServices.length : undefined}
                 action=""
               />
               <div className="table-toolbar">
@@ -790,8 +1008,8 @@ function App() {
               {activeServices.length === 0 && (
                 <div className="empty-state">
                   <Heart />
-                  <strong>{active === "favorites" ? "还没有收藏服务" : "还没有服务"}</strong>
-                  <span>{active === "favorites" ? "在服务详情中收藏常用入口。" : "添加一个服务来开始监控运行状态。"}</span>
+                  <strong>{directoryState === "loading" ? "正在读取服务目录" : directoryState === "error" ? "服务目录读取失败" : active === "favorites" ? "还没有收藏服务" : "还没有服务"}</strong>
+                  <span>{directoryState !== "ready" ? "读取完成后再确认服务和收藏，现有入口不会被修改。" : active === "favorites" ? "在服务详情中收藏常用入口。" : "添加一个服务来开始监控运行状态。"}</span>
                 </div>
               )}
             </section>
@@ -859,7 +1077,7 @@ function App() {
               <Star size={15} fill={favorites.includes(selected.slug) ? "currentColor" : "none"} />
               {favorites.includes(selected.slug) ? "已收藏" : "收藏服务"}
             </button>
-            {canWrite && (
+            {inManagement && canWrite && (
               <button
                 className="primary wide"
                 onClick={() => check(selected)}
@@ -869,8 +1087,9 @@ function App() {
                 {loading ? "检查中..." : "立即检查"}
               </button>
             )}
+            {!inManagement && canWrite && <button className="secondary wide" onClick={() => setActive("services")}><Settings size={15} aria-hidden="true" />管理此服务</button>}
             <div className="drawer-actions">
-              {canWrite && (
+              {inManagement && canWrite && (
                 <button
                   className="secondary"
                   onClick={() => {
@@ -881,7 +1100,7 @@ function App() {
                   编辑
                 </button>
               )}
-              {canDelete && (
+              {inManagement && canDelete && (
                 <button
                   className="danger"
                   onClick={() => deleteService(selected)}
@@ -893,7 +1112,7 @@ function App() {
           </div>
         </Dialog>
       )}
-      {serviceForm !== null && (
+      {inManagement && serviceForm !== null && (
         <ServiceForm
           service={serviceForm || undefined}
           groups={groups}
@@ -901,12 +1120,13 @@ function App() {
           onSave={saveService}
         />
       )}
-      {managementAction && (
+      {inManagement && managementAction && (
         <ManagementDialog
           action={managementAction}
           canDelete={canDelete}
           onClose={() => setManagementAction(null)}
           onDone={(message) => {
+            if (dataGeneration.current !== viewGeneration) return;
             setManagementAction(null);
             setNotice(message);
             void refreshData();
@@ -924,14 +1144,6 @@ function App() {
         />
       )}
     </div>
-  );
-}
-function BellDot() {
-  return (
-    <span className="bell-dot">
-      <Activity size={17} />
-      <i />
-    </span>
   );
 }
 function ServiceForm({
@@ -979,10 +1191,7 @@ function ServiceForm({
         }}
       >
         <div className="modal-head">
-          <div>
-            <div className="eyebrow">SERVICE CONFIGURATION</div>
-            <h2>{title}</h2>
-          </div>
+          <h2>{title}</h2>
           <button type="button" className="icon-btn" aria-label="关闭" disabled={busy} onClick={onClose}>
             <X size={18} />
           </button>
@@ -1106,139 +1315,6 @@ function CommandPalette({
         </div>
       </div>
     </Dialog>
-  );
-}
-function AuthScreen({
-  mode,
-  onSubmit,
-  error,
-}: {
-  mode: "loading" | "error" | "login" | "bootstrap";
-  onSubmit: (data: { email?: string; password?: string }) => void;
-  error: string;
-}) {
-  const [email, setEmail] = useState(""),
-    [password, setPassword] = useState("");
-  if (mode === "loading")
-    return (
-      <div className="auth-page">
-        <div className="auth-box">
-          <div className="brand-mark">
-            <Zap size={17} />
-          </div>
-          <p>正在检查面板状态…</p>
-        </div>
-      </div>
-    );
-  const setup = mode === "bootstrap";
-  return (
-    <div className="auth-page">
-      <form
-        className="auth-box"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (mode === "error") {
-            onSubmit({});
-            return;
-          }
-          onSubmit({ email, password });
-        }}
-      >
-        <div className="auth-brand">
-          <div className="brand-mark">
-            <Zap size={17} />
-          </div>
-          <span>
-            NEXUS <small>CONTROL</small>
-          </span>
-        </div>
-        <div className="eyebrow">
-          {mode === "error"
-            ? "CONNECTION ERROR"
-            : setup
-              ? "FIRST-TIME SETUP"
-              : "SECURE ACCESS"}
-        </div>
-        <h1>
-          {mode === "error"
-            ? "面板暂不可用"
-            : setup
-              ? "创建管理员"
-              : "登录面板"}
-        </h1>
-        <p>
-          {mode === "error"
-            ? "无法连接 API 服务。检查服务器状态后重试。"
-            : setup
-              ? "首次启动需要创建管理员账户。"
-              : "使用管理员账户访问服务控制台。"}
-        </p>
-        {mode !== "error" && (
-          <>
-            <label>
-              邮箱
-              <input
-                type="email"
-                autoComplete="username"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@example.com"
-              />
-            </label>
-            <label>
-              密码
-              <input
-                type="password"
-                autoComplete={setup ? "new-password" : "current-password"}
-                minLength={setup ? 12 : 1}
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={setup ? "至少 12 个字符" : "输入密码"}
-              />
-            </label>
-          </>
-        )}
-        {error && (
-          <div className="auth-error">
-            <AlertTriangle size={15} />
-            {error}
-          </div>
-        )}
-        <button className="primary auth-submit" type="submit">
-          {mode === "error" ? "重新连接" : setup ? "创建管理员" : "登录"}
-        </button>
-        <div className="auth-foot">
-          <ShieldCheck size={14} />
-          本地认证 · HTTP-only 会话
-        </div>
-      </form>
-    </div>
-  );
-}
-function Metric({
-  label,
-  value,
-  hint,
-  icon,
-  tone,
-}: {
-  label: string;
-  value: string | number;
-  hint: string;
-  icon: React.ReactNode;
-  tone: string;
-}) {
-  return (
-    <div className="metric">
-      <div className={`metric-icon ${tone}`}>{icon}</div>
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <small>{hint}</small>
-      </div>
-    </div>
   );
 }
 function PanelHeader({

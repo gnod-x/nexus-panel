@@ -25,7 +25,7 @@ export function actionError(error: unknown, fallback: string): string {
   if (error.status === 401) return "会话已过期，请重新登录。";
   if (error.status === 403) return "当前账户无权执行此操作。";
   if (error.code === "invalid_target") return "请检查 HTTP(S) 地址和探测网络配置。";
-  if (error.code === "missing_group") return "所选分组不存在，请刷新后重试。";
+  if (error.code === "missing_group" || error.code === "invalid_group") return "所选分组不存在，请刷新后重试。";
   if (error.status === 409) return "标识符已存在，请使用不同的标识符。";
   if (error.status === 413) return "导入文件不超过 1 MiB。";
   if (error.status === 400) return "输入内容不符合要求，请检查后重试。";

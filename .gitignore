@@ -18,3 +18,5 @@ data/
 *.db-shm
 *.db-wal
 sun-panel-import*.json
+
+artifacts/

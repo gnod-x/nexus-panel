@@ -8,6 +8,8 @@ primary="nexus-smoke-$$"
 restored="${primary}-restore"
 target="${primary}-target"
 export NEXUS_IMAGE="$image" NEXUS_BIND_ADDRESS=127.0.0.1 NEXUS_PORT=0
+export TASK_DEMO_MODE=false INTEGRATION_DEMO_MODE=false
+export PUBLIC_ORIGIN=''
 export HEALTH_ALLOWED_CIDRS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
 compose() {
@@ -56,9 +58,19 @@ compose "$primary" up -d --no-build --pull never
 base=$(ready "$primary")
 mime=$(curl -fsS --max-time 5 -o /dev/null -w '%{content_type}' "$base/")
 [[ $mime == 'text/html; charset=utf-8' ]]
-[[ $(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "$base/api/services") == 401 ]]
+for endpoint in services tasks integrations settings; do
+  [[ $(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "$base/api/$endpoint") == 401 ]]
+done
 json_post -d "$login" "$base/api/auth/bootstrap" >/dev/null
 json_post -c "$work/session" -d "$login" "$base/api/auth/login" >/dev/null
+curl -fsS --max-time 5 -b "$work/session" "$base/api/settings" |
+  python3 -c 'import json, sys; assert json.load(sys.stdin)["homeFont"] == "calligraphy"'
+json_post -b "$work/session" -X PATCH -d '{"homeFont":"sans"}' "$base/api/settings" |
+  python3 -c 'import json, sys; assert json.load(sys.stdin)["homeFont"] == "sans"'
+curl -fsS --max-time 5 -b "$work/session" "$base/api/tasks" |
+  python3 -c 'import json, sys; s = json.load(sys.stdin)["snapshot"]; assert s["mode"] == "unconfigured" and not s["tasks"] and s["freshness"] == "unknown"'
+curl -fsS --max-time 5 -b "$work/session" "$base/api/integrations" |
+  python3 -c 'import json, sys; s = json.load(sys.stdin)["snapshot"]; assert s["mode"] == "unconfigured" and len(s["connections"]) == 2 and all(c["status"] == "unconfigured" and not c["metrics"] for c in s["connections"])'
 json_post -b "$work/session" -d '{"name":"Smoke group","slug":"smoke-group"}' "$base/api/groups" >/dev/null
 
 docker run --rm -d --name "$target" --network "${primary}_default" "$image" \
@@ -81,12 +93,14 @@ verify_directory() {
     python3 -c 'import json, sys; (g,) = json.load(sys.stdin)["groups"]; assert g["slug"] == "smoke-group"'
   curl -fsS --max-time 5 -b "$work/session" "$1/api/events" |
     python3 -c 'import json, sys; (e,) = json.load(sys.stdin)["events"]; assert e["type"] == "health_check"'
+  curl -fsS --max-time 5 -b "$work/session" "$1/api/settings" |
+    python3 -c 'import json, sys; assert json.load(sys.stdin)["homeFont"] == "sans"'
 }
 
 compose "$primary" restart -t 5
 base=$(ready "$primary")
 verify_directory "$base"
-printf 'Clean install, login, health check and restart passed.\n'
+printf 'Clean install, default font, admin update, health check and restart passed.\n'
 
 compose "$primary" stop -t 5
 docker run --rm --network none --user 0:0 -v "${primary}_nexus_data:/data:ro" \
@@ -99,4 +113,14 @@ compose "$restored" start
 base=$(ready "$restored")
 json_post -c "$work/session" -d "$login" "$base/api/auth/login" >/dev/null
 verify_directory "$base"
-printf 'Backup restored to a new volume; admin, groups, services and events verified.\n'
+printf 'Backup restored to a new volume; admin, groups, services, events and font verified.\n'
+
+# Explicit synthetic mode is exercised only in the disposable restored instance.
+TASK_DEMO_MODE=true INTEGRATION_DEMO_MODE=true compose "$restored" up -d --no-build --pull never
+base=$(ready "$restored")
+curl -fsS --max-time 5 -b "$work/session" "$base/api/tasks" |
+  python3 -c 'import json, sys; s = json.load(sys.stdin)["snapshot"]; assert s["mode"] == "demo" and len(s["tasks"]) > 0'
+curl -fsS --max-time 5 -b "$work/session" "$base/api/integrations" |
+  python3 -c 'import json, sys; s = json.load(sys.stdin)["snapshot"]; assert s["mode"] == "demo" and len(s["connections"]) == 2 and all(c["status"] == "demo" and c["metrics"] for c in s["connections"])'
+verify_directory "$base"
+printf 'Read-only endpoints, safe unconfigured defaults and explicit synthetic mode verified.\n'

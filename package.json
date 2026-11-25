@@ -1,6 +1,6 @@
 {
   "name": "nexus-panel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -12,7 +12,7 @@
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "node dist/server/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.client.json && tsc --noEmit -p tsconfig.server.json",
-    "test": "vitest run --exclude tests/e2e/**",
+    "test": "vitest run --exclude 'tests/e2e/**'",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "check": "npm run typecheck && npm test && npm run build"

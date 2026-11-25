@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          version = json.loads(Path('package.json').read_text())['version']
+          if not re.fullmatch(r'\d+\.\d+\.\d+', version):
+              raise SystemExit('Release requires a stable semantic version')
+          if os.environ['RELEASE_TAG'] != 'v' + version:
+              raise SystemExit('Tag does not match package.json version')
+          if not (Path('docs/releases') / (os.environ['RELEASE_TAG'] + '.md')).is_file():
+              raise SystemExit('Release notes are missing for this tag')
+          lock = json.loads(Path('package-lock.json').read_text())
+          if lock['version'] != version or lock['packages']['']['version'] != version:
+              raise SystemExit('Lockfile version does not match package.json')
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('RELEASE_VERSION=' + version + '\n')
+          PY
+      - run: npm ci
+      - run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - run: npm audit --omit=dev --audit-level=high
+      - run: python3 -B -m unittest discover -s tests -p 'test_*.py'
+      - run: python3 -B -m unittest discover -s tests/server -p 'test_*.py'
+      - name: Build release image
+        run: docker build --build-arg APP_VERSION="$RELEASE_VERSION" -t "nexus-panel:$RELEASE_VERSION" .
+      - name: Verify final image and backup recovery
+        env:
+          LOGIN_USERNAME: ''
+          LOGIN_USER_ID: ''
+        run: bash scripts/compose-smoke.sh "nexus-panel:$RELEASE_VERSION"
+      - name: Package release
+        run: bash scripts/package-release.sh "$RUNNER_TEMP/nexus-release"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "$RUNNER_TEMP/nexus-release/"*.tar.gz \
+            "$RUNNER_TEMP/nexus-release/"*.tar.gz.sha256 \
+            --verify-tag --notes-file "docs/releases/$RELEASE_TAG.md" \
+            --title "Nexus Panel $RELEASE_TAG"

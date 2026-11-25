@@ -1,6 +1,6 @@
 services:
   nexus-panel:
-    image: ${NEXUS_IMAGE:-nexus-panel:0.1.0}
+    image: ${NEXUS_IMAGE:-nexus-panel:0.2.0}
     restart: unless-stopped
     init: true
     read_only: true
@@ -21,7 +21,14 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOST: 0.0.0.0
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
+      LOGIN_USERNAME: ${LOGIN_USERNAME:-}
+      LOGIN_USER_ID: ${LOGIN_USER_ID:-}
       DATABASE_PATH: /data/nexus.db
+      TASK_DEMO_MODE: ${TASK_DEMO_MODE:-false}
+      TASK_SNAPSHOT_PATH: ${TASK_SNAPSHOT_PATH:-/data/task-snapshot.json}
+      INTEGRATION_DEMO_MODE: ${INTEGRATION_DEMO_MODE:-false}
+      INTEGRATION_CONFIG_PATH: ${INTEGRATION_CONFIG_PATH:-/data/integrations.json}
       HEALTH_TIMEOUT_MS: ${HEALTH_TIMEOUT_MS:-5000}
       HEALTH_ALLOWED_CIDRS: ${HEALTH_ALLOWED_CIDRS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
     healthcheck:
