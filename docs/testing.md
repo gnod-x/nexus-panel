@@ -61,6 +61,23 @@ Historical cloud font-specific tests passed, but broad cloud suites had stale he
 
 The first local baseline recorded 53/57 passed; failures exposed a genuine 320px long-name task-card overflow and obsolete light-default theme expectations. The first audit recorded 71/74 passed: that overflow/theme issue and a composite CRUD test reaching its total deadline while sharing constrained browser resources. The flex child's minimum content width caused the overflow; a local `min-width: 0` and `overflow-wrap: anywhere` repair passed independent probes in both themes at 320/375/844/1440px and doubled text at 320px. Initial failures remain diagnostic evidence. Final acceptance uses fresh builds/reruns after the repairs, without skipped tests or weakened overflow assertions.
 
+## Accepted 0.2.0 results — 2026-11-25
+
+The accepted application and test inputs match commit `f19779cc2c6ece155ada0311d4a721bb8683cdf5`; subsequent release-document updates do not change those inputs. The local browser runs used one worker and zero retries. Each suite completed with zero skipped, unexpected or flaky results.
+
+| Check | Accepted result | Duration / evidence |
+| --- | --- | --- |
+| Chromium baseline | 57/57 passed | 242.4 seconds; `baseline/final-isolated/` |
+| Independent Chromium audit | 74/74 passed | 306.5 seconds; `audit/accepted/browser-results-chromium.json` |
+| Independent Firefox audit | 74/74 passed | 313.3 seconds; `audit/accepted/browser-results-firefox.json` |
+| Static, unit/API and production build | Type checks, 338 Vitest tests and build passed | `static-vitest-build-final.log` |
+| Python discovery roots | 19 root and 24 server methods passed | `python-root-final.log`, `python-server-final.log` |
+| Production dependency audit | Zero reported vulnerabilities | `npm-audit-production.json` |
+| Final local image smoke | Install, auth, fonts, restart and isolated backup/restore passed | `container-smoke-final.log` |
+| Independent GitHub candidate CI | Passed for `f19779c` | Actions run `45594897585` |
+
+Evidence paths above are relative to the private local directory `artifacts/local-release-20261125/`, excluded from source control and release bundles. The audit's 34 source-file hashes and the baseline's 44 input hashes were rechecked against the accepted checkout. The published-bundle image and live deployment require separate post-publication verification; these candidate results alone do not claim that rollout has occurred.
+
 ## Evidence scope and retention
 
 Retain JSON reports, logs, relevant screenshots/traces, image identities and required private rollback materials. Keep household data/configuration out of source control and release assets. Remove this task's temporary browsers/dependencies, isolated containers/volumes and superseded build outputs after verification; never prune another task's resources.
